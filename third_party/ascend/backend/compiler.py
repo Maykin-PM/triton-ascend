@@ -581,6 +581,10 @@ def linalg_to_bin_enable_npu_compile_910_95(linalg: str, metadata, opt):
         compile_mode = metadata.get("compile_mode", "simd")
         if compile_mode == "simd_simt":
             _compile_option_list += ["--enable-simd-simt-mix-compile"]
+            num_warps = metadata.get("num_warps", opt.num_warps)
+            _compile_option_list += [f"--num-warps={num_warps}"]
+            warp_size = metadata.get("warp_size", opt.warp_size)
+            _compile_option_list += [f"--threads-per-warp={warp_size}"]
 
         cmd_list = (
             [npu_compiler_path, ttadapter_path]
