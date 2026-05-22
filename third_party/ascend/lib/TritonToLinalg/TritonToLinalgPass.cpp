@@ -59,7 +59,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/Visitors.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/Passes.h"
@@ -457,6 +457,20 @@ void TritonToLinalgPass::addDynamicLegal(
         }
       });
 
+  // For func::CallOp, it's illegal if it has triton::PointerType operands
+  // (the SimtFuncConverter will convert the callee function signature)
+  target.addDynamicallyLegalOp<func::CallOp>([](func::CallOp op) {
+    return llvm::all_of(op.getOperandTypes(), [](Type t) {
+      if (isa<triton::PointerType>(t)) {
+        return false;
+      }
+      if (auto shapedType = dyn_cast<ShapedType>(t)) {
+        return !isa<triton::PointerType>(shapedType.getElementType());
+      }
+      return true;
+    });
+  });
+
   target.addDynamicallyLegalOp<triton::FuncOp>([&](triton::FuncOp op) {
     return tritonTypeConverter.isSignatureLegal(op.getFunctionType());
   });
@@ -523,6 +537,59 @@ void TritonToLinalgPass::addDynamicLegal(
         return this->namedOps || !operateOnTensors;
       });
 }
+
+class SimtFuncConverter : public OpConversionPattern<func::CallOp> {
+public:
+  using OpConversionPattern<func::CallOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(func::CallOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    auto *context = rewriter.getContext();
+
+    LLVM_DEBUG({
+      llvm::dbgs() << "SimtFuncConverter: \n";
+      op.dump();
+    });
+
+    for (auto operand : adaptor.getOperands()) {
+      operand.dump();
+    }
+
+    // Get callee via getCallee() which returns FlatSymbolRefAttr
+    auto calleeAttr = op.getCallee();
+    if (calleeAttr.empty()) {
+      LLVM_DEBUG(llvm::dbgs() << "  No callee, skipping\n");
+      return failure();
+    }
+
+    // Look up the called func::FuncOp
+    auto funcOp = dyn_cast<func::FuncOp>(
+        SymbolTable::lookupSymbolIn(op->getParentOfType<ModuleOp>(), calleeAttr));
+    if (!funcOp) {
+      return failure();
+    }
+
+    // Convert callee function type: replace !tt.ptr<T> with memref<?xT>
+    auto oldFuncType = funcOp.getFunctionType();
+    SmallVector<Type> newInputTypes;
+    SmallVector<Value> newOperands;
+    for (auto operand : adaptor.getOperands()) {
+      newInputTypes.push_back(operand.getType());
+      newOperands.push_back(operand);
+    }
+    auto newFuncType = FunctionType::get(context, newInputTypes, oldFuncType.getResults());
+    funcOp.setFunctionType(newFuncType);
+
+
+    // Create new call with converted operands
+    auto newCall = rewriter.create<func::CallOp>(
+        loc, calleeAttr, op.getResultTypes(), newOperands);
+    rewriter.replaceOp(op, newCall.getResults());
+    return success();
+  }
+};
+
 
 void TritonToLinalgPass::populateTritonToLinalgCanonicalizationPatterns(RewritePatternSet &patterns)
 {
@@ -647,6 +714,9 @@ void TritonToLinalgPass::populateTritonToLinalgConversionPatterns(
 
   // Add convert pattern for CustomOp.
   patterns.add<CustomOpConverter>(patterns.getContext());
+
+  // Add convert pattern for SimtFuncConverter.
+  patterns.add<SimtFuncConverter>(patterns.getContext());
 
   if (!this->namedOps) {
     linalg::populateElementwiseToLinalgConversionPatterns(patterns);
