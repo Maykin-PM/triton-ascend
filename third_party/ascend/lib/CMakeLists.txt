@@ -6,6 +6,7 @@ add_subdirectory(TritonToHIVM)
 add_subdirectory(TritonToGraph)
 add_subdirectory(TritonToLinalg)
 add_subdirectory(Utils)
+add_subdirectory(VVMix)
 add_subdirectory(DiscreteMaskAccessConversion)
 add_subdirectory(TritonToUnstructure)
 add_subdirectory(TritonToLLVM)
@@ -28,6 +29,7 @@ if(TRITON_ENABLE_COVERAGE_HITEST)
       TritonAscendIR               # from Dialect/TritonAscend/IR
       TritonStructuredIR           # from Dialect/TritonStructured/IR
       AutoBlockify
+      VVMix
       TritonAffinityOpt
   )
 
