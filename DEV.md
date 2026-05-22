@@ -7,7 +7,7 @@ TRITON_BUILD_WITH_CCACHE=true TRITON_BUILD_WITH_CLANG_LLD=true TRITON_BUILD_PROT
 cd ./build/cmake.linux-aarch64-cpython-3.13
 
 # 2. 配置 CMake（Debug 模式，禁用 strip）
-cmake -S ../../triton-ascend -B . \
+cmake -S ../../../triton-ascend -B . \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_CXX_FLAGS="-O0 -g" \
   -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -Wl,-z,now -pie -Wl,--gc-sections"
@@ -21,7 +21,7 @@ ninja -t clean && ninja -j$(nproc) triton-opt
 * pass 调试
 bin/triton-opt kernel.mlir --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg  --mlir-print-ir-after-all --mlir-print-debuginfo &> 0.log
 
-bin/triton-opt target_wo_scalar.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg  --mlir-print-ir-after-all --mlir-print-debuginfo &> 0.log
+bin/triton-opt debug.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg  --mlir-print-ir-after-all --mlir-print-debuginfo &> 0.log
 
 * IR:
 module attributes {hacc.target = #hacc.target<"Ascend910_9589">} {

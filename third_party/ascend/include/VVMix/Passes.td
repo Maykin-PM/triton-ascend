@@ -33,7 +33,8 @@ def VVMix : Pass<"vv-mix", "mlir::ModuleOp"> {
         "mlir::func::FuncDialect",
         "mlir::triton::TritonDialect",
         "mlir::scf::SCFDialect",
-        "mlir::tensor::TensorDialect"
+        "mlir::tensor::TensorDialect",
+        "mlir::triton::ascend::TritonAscendDialect"
     ];
 }
 

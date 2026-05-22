@@ -29,6 +29,7 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"
+#include "ascend/include/Dialect/TritonAscend/IR/TritonAscendDialect.h"
 
 #include "bishengir/Dialect/Scope/IR/Scope.h"
 
@@ -42,6 +43,8 @@ using namespace triton;
 
 // Rewrite tensor_ptr to ptr_tensor in simt scope;
 static LogicalResult processTensorPtrInSimtScope(ModuleOp moduleOp) {
+
+  bool outlineTensorPtr = false;
   SmallVector<scope::ScopeOp> scopeOps;
   moduleOp.walk([&](scope::ScopeOp op) {
     if (auto vectorType = op->getAttrOfType<StringAttr>("vector_type")) {
@@ -134,9 +137,6 @@ static LogicalResult processTensorPtrInSimtScope(ModuleOp moduleOp) {
             cachedPtrOffset[tensor_ptr] = ptr_offset;
           }
 
-          auto basePtrType = cast<triton::PointerType>(base.getType());
-          auto ptrTensorType = RankedTensorType::get(tensorShape, basePtrType);
-
           std::optional<ArrayRef<int>> boundaryCheck;
           if (auto loadOp = dyn_cast<triton::LoadOp>(op)) {
             assert(!loadOp.getMask() && !loadOp.getOther());
@@ -151,8 +151,14 @@ static LogicalResult processTensorPtrInSimtScope(ModuleOp moduleOp) {
           loc = op->getLoc();
 
           // get newPtr
-          Value newPtr = rewriter.create<triton::SplatOp>(loc, ptrTensorType, base);
-          newPtr = rewriter.create<triton::AddPtrOp>(loc, ptrTensorType, newPtr, ptr_offset);
+          Value newPtr;
+          auto basePtrType = cast<triton::PointerType>(base.getType());
+          auto ptrTensorType = RankedTensorType::get(tensorShape, basePtrType);
+          if (outlineTensorPtr) {
+            newPtr = rewriter.create<triton::SplatOp>(loc, ptrTensorType, base);
+            newPtr = rewriter.create<triton::AddPtrOp>(loc, ptrTensorType, newPtr, ptr_offset);
+          }
+
           // get mask
           Value newMask;
           bool inited = false;
@@ -238,14 +244,27 @@ static LogicalResult processTensorPtrInSimtScope(ModuleOp moduleOp) {
           }
          
           if (auto loadOp = dyn_cast<triton::LoadOp>(op)) {
-            // auto newOp = rewriter.create<triton::LoadOp>(
-            //   loadOp.getLoc(), newPtr, newMask, newOther, loadOp.getCache(),
-            //   loadOp.getEvict(), loadOp.getIsVolatile());
-            auto newOp = rewriter.create<triton::LoadOp>(
-              loadOp.getLoc(), newPtr, loadOp.getMask(), loadOp.getOther(), loadOp.getCache(),
-              loadOp.getEvict(), loadOp.getIsVolatile());
-            rewriter.replaceOp(op, newOp.getResult());
+            if (outlineTensorPtr) {
+              auto newOp = rewriter.create<triton::LoadOp>(
+                loadOp.getLoc(), newPtr, newMask, newOther, loadOp.getCache(),
+                loadOp.getEvict(), loadOp.getIsVolatile());
+              rewriter.replaceOp(op, newOp.getResult());
+              
+            } else {
+              auto resultType = loadOp.getResult().getType();
+              auto cacheAttr = triton::CacheModifierAttr::get(op->getContext(), loadOp.getCache());
+              auto evictAttr = triton::EvictionPolicyAttr::get(op->getContext(), loadOp.getEvict());
+              auto isVolatileAttr = rewriter.getBoolAttr(loadOp.getIsVolatile());
+              
+              auto newOp = rewriter.create<triton::ascend::UnstructuredLoadOp>(
+                loc, resultType, base, ptr_offset,
+                rewriter.getDenseI64ArrayAttr({}),
+                newMask, newOther, cacheAttr, evictAttr, isVolatileAttr);
+
+              rewriter.replaceOp(op, newOp.getResult());
+            }
           } else  if (auto storeOp = dyn_cast<triton::StoreOp>(op)) {
+            //@TODO
             auto newOp = rewriter.create<triton::StoreOp>(
               loc, newPtr, storeOp.getValue(), newMask,
               storeOp.getCache(), storeOp.getEvict());

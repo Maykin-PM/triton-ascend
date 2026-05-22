@@ -25,6 +25,7 @@
 
 #include "mlir/Pass/Pass.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
+#include "ascend/include/Dialect/TritonAscend/IR/TritonAscendDialect.h"
 
 #define GEN_PASS_DECL_VVMIX
 #include "ascend/include/VVMix/Passes.h.inc"

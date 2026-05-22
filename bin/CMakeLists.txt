@@ -20,6 +20,7 @@ target_link_libraries(triton-opt PRIVATE
   TritonToLLVM
   TritonToStructured
   TritonToUnstructure
+  VVMix
   # BiShengIR dialects
   BiShengIRAnnotationDialect
   BiShengIRHACCDialect
