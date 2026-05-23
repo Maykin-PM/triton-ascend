@@ -53,6 +53,7 @@
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
 #include "bishengir/Dialect/HFusion/IR/HFusion.h"
 #include "bishengir/Dialect/HIVM/IR/HIVM.h"
+#include "bishengir/Dialect/Scope/IR/Scope.h"
 
 namespace TTOpConverters {
 using namespace mlir;
@@ -206,8 +207,27 @@ LogicalResult PreciseDivConverter::matchAndRewrite(
   return success();
 }
 
+bool inSimtScope(Operation *op) {
+  auto parentOp = op->getParentOp();
+  while (parentOp) {
+    if (isa<scope::ScopeOp>(parentOp)) {
+      if (auto vectorType = parentOp->getAttrOfType<StringAttr>("vector_type")) {
+        if (vectorType.str() == "simt") {
+          return true;
+        }
+      }
+    }
+    parentOp = parentOp->getParentOp();
+  }
+  return false;
+}
+
 LogicalResult SelectCanonicalizer::matchAndRewrite(
     arith::SelectOp op, PatternRewriter &rewriter) const {
+  // Shield op in simt scope
+  if (inSimtScope(op)) {
+    return failure();
+  }
   auto loc = op.getLoc();
 
   // 0. Shortcut for scalars and bool type
