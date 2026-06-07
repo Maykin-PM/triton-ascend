@@ -21,7 +21,9 @@ ninja -t clean && ninja -j$(nproc) triton-opt
 * pass 调试
 bin/triton-opt kernel.mlir --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg  --mlir-print-ir-after-all --mlir-print-debuginfo &> 0.log
 
-bin/triton-opt debug.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg  --mlir-print-ir-after-all --mlir-print-debuginfo &> 0.log
+bin/triton-opt target.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg  --mlir-print-ir-after-all --mlir-print-debuginfo &> 0.log
+
+bin/triton-opt target.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg &> 1.log
 
 * IR:
 module attributes {hacc.target = #hacc.target<"Ascend910_9589">} {

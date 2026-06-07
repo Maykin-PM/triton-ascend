@@ -2877,8 +2877,9 @@ UnstructuredLoadConverter::matchAndRewrite(
   }
 
   // Check compile mode: hfusion gather_load vs simt_template func.call
+  // @TODO:
   bool isSimdSimtMode = (compileModeFlag == ascend::CompileMode::SimdSimt);
-  if (isSimdSimtMode) {
+  if (isSimdSimtMode || 1) {
     auto burstLen = rewriter.create<arith::ConstantIntOp>(loc, burstlen, 32);
 
     Value scalarOther;
@@ -2892,8 +2893,13 @@ UnstructuredLoadConverter::matchAndRewrite(
     Value dst = rewriter.create<tensor::EmptyOp>(
         loc, resultShape, cast<RankedTensorType>(resTy).getElementType());
 
+    // auto gatherLoadOp = rewriter.create<hfusion::GatherLoadOp>(
+    //     loc, baseMem, offsets, burstLen, mask, scalarOther, dst,
+    //     hfusion::CacheModifierAttr{}, hfusion::EvictionPolicyAttr{},
+    //     mlir::BoolAttr{});
+
     auto gatherLoadOp = rewriter.create<hfusion::GatherLoadOp>(
-        loc, baseMem, offsets, burstLen, mask, scalarOther, dst,
+        loc, baseMem, offsets, burstLen, mask, other, dst,
         hfusion::CacheModifierAttr{}, hfusion::EvictionPolicyAttr{},
         mlir::BoolAttr{});
     rewriter.replaceOp(op, gatherLoadOp.getResult());

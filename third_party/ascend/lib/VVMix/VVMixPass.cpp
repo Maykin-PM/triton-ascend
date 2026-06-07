@@ -22,6 +22,7 @@
 
 #include "ascend/include/VVMix/VVMixPass.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/IRMapping.h"
@@ -279,7 +280,57 @@ static LogicalResult processTensorPtrInSimtScope(ModuleOp moduleOp) {
 
 // Extract scalar compute from simt scope;
 static LogicalResult extractScalarComputeFromSimtScope(ModuleOp moduleOp) {
-  // @TODO
+  // 将scope中使用的外部常量复制一份到scope内部使用
+  SmallVector<scope::ScopeOp> scopeOps;
+  moduleOp.walk([&](scope::ScopeOp op) {
+    if (auto vectorType = op->getAttrOfType<StringAttr>("vector_type")) {
+      if (vectorType.str() != "simt") {
+        return;
+      }
+    }
+    scopeOps.push_back(op);
+  });
+
+  MLIRContext *context = moduleOp->getContext();
+  IRRewriter rewriter(context);
+
+  for (auto scopeOp : scopeOps) {
+    // 收集所有在scope外部定义的常量
+    DenseMap<Value, Value> externalConstants;
+    
+    scopeOp.walk<WalkOrder::PreOrder>([&](Operation *op) {
+      for (auto &opr : op->getOpOperands()) {
+        auto val = opr.get();
+        // 检查是否是外部定义的常量
+        if (auto *defOp = val.getDefiningOp()) {
+          if (isa<arith::ConstantOp>(defOp) && !scopeOp->isAncestor(defOp)) {
+            // 这是一个外部定义的常量
+            if (externalConstants.find(val) == externalConstants.end()) {
+              // 还没有复制过，需要复制
+              OpBuilder builder(scopeOp.getRegion());
+              builder.setInsertionPointToStart(&scopeOp.getRegion().front());
+              auto newConstant = builder.create<arith::ConstantOp>(
+                  defOp->getLoc(), cast<arith::ConstantOp>(defOp).getValue());
+              externalConstants[val] = newConstant.getResult();
+            }
+          }
+        }
+      }
+    });
+
+    // 替换所有对外部常量的使用
+    if (!externalConstants.empty()) {
+      scopeOp.walk<WalkOrder::PreOrder>([&](Operation *op) {
+        for (auto &opr : op->getOpOperands()) {
+          auto it = externalConstants.find(opr.get());
+          if (it != externalConstants.end()) {
+            opr.set(it->second);
+          }
+        }
+      });
+    }
+  }
+  
   return success();
 }
 
@@ -402,15 +453,20 @@ std::unique_ptr<OperationPass<ModuleOp>> createVVMixPass() {
 void VVMixPass::runOnOperation() {
   auto moduleOp = getOperation();
 
-  if (failed(processTensorPtrInSimtScope(moduleOp))) {
-    signalPassFailure();
-    return;
-  }
-
   if (failed(extractScalarComputeFromSimtScope(moduleOp))) {
     signalPassFailure();
     return;
   }
+
+  if (failed(outlineSimtScope(moduleOp))) {
+    signalPassFailure();
+    return;
+  }
+
+  // if (failed(processTensorPtrInSimtScope(moduleOp))) {
+  //   signalPassFailure();
+  //   return;
+  // }
 
   // @TODO: Experimental feature, to support more general mix-pipeline;
   if (0) {
