@@ -116,10 +116,16 @@ def ttir_to_linalg(mod, metadata, opt, *, named_ops=False):
         enable_mask_fallback_conversion = metadata["enable_mask_fallback_conversion"]
         optimize_dynamic_offset = metadata["optimize_dynamic_offset"]
         auto_blockify_size = metadata["auto_blockify_size"]
+        outline_simt_scope = metadata["outline_simt_scope"]
         if not _is_auto_map_parallel_blocks_enabled():
             auto_blockify_size = 1
         pm = ir.pass_manager(mod.context)
         pm.enable_debug()
+
+        ascend.passes.ttir.add_vv_mix(
+            pm,
+            outline_simt_scope
+        )
         ascend.passes.ttir.add_auto_blockify(
             pm,
             auto_blockify_size
@@ -923,6 +929,8 @@ class NPUOptions:
     add_auto_scheduling: bool = False
     enable_dynamic_cv_pipeline: bool = False
     hfusion_enable_multiple_consumer_fusion: bool = False
+    # Experimental feature: try to support more general mix-pipeline
+    outline_simt_scope: bool = False
 
     stream: int = None
     parallel_mode: str = "simd"

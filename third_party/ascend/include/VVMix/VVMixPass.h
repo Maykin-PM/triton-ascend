@@ -36,11 +36,11 @@
 namespace mlir {
 namespace triton {
 
-std::unique_ptr<OperationPass<ModuleOp>> createVVMixPass();
+std::unique_ptr<OperationPass<ModuleOp>> createVVMixPass(const VVMixOptions &options = {});
 
 class VVMixPass : public ::impl::VVMixBase<VVMixPass> {
 public:
-  VVMixPass() = default;
+  explicit VVMixPass(const VVMixOptions &options);
 
   void runOnOperation() override;
 };

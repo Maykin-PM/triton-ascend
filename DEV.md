@@ -25,7 +25,20 @@ bin/triton-opt target.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --tri
 
 bin/triton-opt target.mlir --vv-mix --auto-blockify="auto-blockify-size=1" --triton-to-structured --discrete-mask-access-conversion --triton-to-annotation --triton-to-unstructure --triton-to-hivm --triton-to-hfusion --triton-to-llvm --bubble-up-operation --triton-to-structured --triton-to-linalg &> 1.log
 
-* IR:
+### 编译
+* Step 1:
+bin/triton-opt --pass-pipeline="any(vv-mix, auto-blockify{auto-blockify-size=1},triton-to-structured{enable-mask-fallback-conversion=false optimize-dynamic-offset=false},discrete-mask-access-conversion{compile-mode=simd_simt compile-on-910-95=true enable-sync-block-lock=false},triton-to-annotation,triton-to-unstructure{compile-mode=simd_simt compile-on-910-95=true force-scalarize-mode=false},triton-to-hivm,triton-to-hfusion,triton-to-llvm,bubble-up-operation{enable-aggressive-mode=true},triton-to-structured{enable-mask-fallback-conversion=false optimize-dynamic-offset=false},triton-to-linalg{compile-mode=simd_simt compile-on-910-95=true enable-nd2nz-on-vector=false enable-select-analysis=false global-kernel=false named-ops=true})" --mlir-print-debuginfo -o kernel.ttadapter.mlir target.mlir
+
+* Step 2:
+bin/triton-mlir-opt --emit-bytecode -o stage2.mlirbc kernel.ttadapter.mlir
+
+* Step 3:
+bin/bishengir-opt stage2.mlirbc --mlir-print-debuginfo &> stage3_.mlir
+
+* Step 4:
+bin/bishengir-compile --target=Ascend910_9589 --enable-auto-multi-buffer=False --enable-auto-bind-sub-block=False --disable-ffts --enable-hfusion-compile=true --enable-triton-kernel-compile=true --enable-simd-simt-mix-compile -o kernel --enable-vf-merge-level=1 --enable-hivm-graph-sync-solver=false -mlir-print-ir-after-all stage3_.mlir &> 0.log
+
+## IR:
 module attributes {hacc.target = #hacc.target<"Ascend910_9589">} {
   func.func private @foo(!tt.ptr<f32>) -> (tensor<16x16xf32>)
   tt.func public @merge_16x16_to_64x64_inverse_kernel_mix(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32, tt.tensor_kind = 0 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: i32) attributes {noinline = false} {

@@ -19,6 +19,7 @@
 #include "ascend/include/TritonToHIVM/Passes.h"
 #include "ascend/include/TritonToHFusion/Passes.h"
 #include "ascend/include/TritonToLLVM/Passes.h"
+#include "ascend/include/VVMix/Passes.h"
 
 #include "ascend/include/DynamicCVPipeline/Passes.h"
 #include "ascend/include/DynamicCVPipeline/Common/BufferCountManager.h"
@@ -344,6 +345,12 @@ void init_triton_ascend_ir(py::module &&m) {
 }
 
 void init_triton_ascend_passes_ttir(py::module &&m) {
+  m.def("add_vv_mix", [](mlir::PassManager &pm,
+    bool outlineSimtScope) {
+    VVMixOptions opts;
+    opts.outline_simt_scope = outlineSimtScope;
+    pm.addPass(mlir::triton::createVVMixPass(opts));});
+
   m.def("add_auto_blockify", [](mlir::PassManager &pm,
     int autoBlockifySize) {
     AutoBlockifyOptions opts;

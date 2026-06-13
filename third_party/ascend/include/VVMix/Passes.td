@@ -28,6 +28,10 @@ include "mlir/Pass/PassBase.td"
 def VVMix : Pass<"vv-mix", "mlir::ModuleOp"> {
     let summary = "VVMix pass for SIMT scope tensor_ptr handling and outlining";
     let constructor = "triton::createVVMixPass()";
+    let options = [
+        Option<"outline_simt_scope", "outline-simt-scope", "bool", "false",
+           "Experimental feature">
+    ];
     let dependentDialects = [
         "mlir::arith::ArithDialect",
         "mlir::func::FuncDialect",

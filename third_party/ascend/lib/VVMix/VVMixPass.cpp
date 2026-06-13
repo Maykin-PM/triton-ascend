@@ -423,7 +423,6 @@ static LogicalResult outlineSimtScope(ModuleOp moduleOp) {
         newFuncOp.getFunctionType(), /*attrs=*/ArrayRef<NamedAttribute>{
             NamedAttribute("sym_visibility", privateVisibility)
         });
-
     rewriter.setInsertionPoint(scopeReturnOp);
     func::CallOp callOp = rewriter.create<func::CallOp>(
         scopeOp->getLoc(), newFuncDecl.getSymNameAttr(), scopeOp->getResultTypes(), inputs);
@@ -446,34 +445,32 @@ static LogicalResult outlineSimtScope(ModuleOp moduleOp) {
 namespace mlir {
 namespace triton {
 
-std::unique_ptr<OperationPass<ModuleOp>> createVVMixPass() {
-  return std::make_unique<VVMixPass>();
+VVMixPass::VVMixPass(const VVMixOptions &options)
+    : VVMixBase(options) {}
+
+std::unique_ptr<OperationPass<ModuleOp>> createVVMixPass(const VVMixOptions &options) {
+  return std::make_unique<VVMixPass>(options);
 }
 
 void VVMixPass::runOnOperation() {
   auto moduleOp = getOperation();
 
-  if (failed(extractScalarComputeFromSimtScope(moduleOp))) {
-    signalPassFailure();
-    return;
-  }
+  // @TODO: Experimental feature, try to support more general mix-pipeline;
+  if (outline_simt_scope) {
+    if (failed(extractScalarComputeFromSimtScope(moduleOp))) {
+      signalPassFailure();
+      return;
+    }
 
-  if (failed(outlineSimtScope(moduleOp))) {
-    signalPassFailure();
-    return;
-  }
-
-  // if (failed(processTensorPtrInSimtScope(moduleOp))) {
-  //   signalPassFailure();
-  //   return;
-  // }
-
-  // @TODO: Experimental feature, to support more general mix-pipeline;
-  if (0) {
     if (failed(outlineSimtScope(moduleOp))) {
       signalPassFailure();
       return;
     }
+  }
+
+  if (failed(processTensorPtrInSimtScope(moduleOp))) {
+    signalPassFailure();
+    return;
   }
 }
 
